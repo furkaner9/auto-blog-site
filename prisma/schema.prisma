@@ -1,0 +1,359 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Kullanıcı Yönetimi
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          UserRole  @default(USER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  posts         Post[]
+  accounts      Account[]
+  sessions      Session[]
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  EDITOR
+}
+
+// NextAuth için
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Blog Kategorileri
+model Category {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  image       String?
+  color       String?  @default("#3B82F6")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  posts       Post[]
+  automationRules AutomationRule[]
+  
+  @@index([slug])
+}
+
+// Blog Yazıları
+model Post {
+  id              String      @id @default(cuid())
+  title           String
+  slug            String      @unique
+  excerpt         String?
+  content         String      @db.Text
+  featuredImage   String?
+  metaTitle       String?
+  metaDescription String?
+  keywords        String[]
+  
+  status          PostStatus  @default(DRAFT)
+  publishedAt     DateTime?
+  scheduledFor    DateTime?
+  
+  views           Int         @default(0)
+  likes           Int         @default(0)
+  
+  isAIGenerated   Boolean     @default(false)
+  aiPrompt        String?     @db.Text
+  aiModel         String?     // "claude-3", "gpt-4" vs.
+  
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  authorId        String
+  author          User        @relation(fields: [authorId], references: [id])
+  
+  categoryId      String
+  category        Category    @relation(fields: [categoryId], references: [id])
+  
+  tags            Tag[]
+  analytics       PostAnalytics?
+  
+  @@index([slug])
+  @@index([status])
+  @@index([publishedAt])
+  @@index([categoryId])
+  @@index([authorId])
+}
+
+enum PostStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
+}
+
+// Etiketler
+model Tag {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  
+  posts     Post[]
+  
+  @@index([slug])
+}
+
+// Otomasyon Kuralları
+model AutomationRule {
+  id              String              @id @default(cuid())
+  name            String
+  description     String?
+  
+  isActive        Boolean             @default(true)
+  
+  // Zamanlama
+  frequency       AutomationFrequency @default(DAILY)
+  time            String?             // "09:00", "14:30" formatında
+  daysOfWeek      Int[]               // [1,2,3,4,5] Pazartesi-Cuma
+  
+  // İçerik ayarları
+  categoryId      String?
+  category        Category?           @relation(fields: [categoryId], references: [id])
+  
+  contentType     String?             // "tutorial", "news", "review" vs.
+  tone            String?             // "professional", "casual", "technical"
+  wordCount       Int                 @default(1000)
+  includeImages   Boolean             @default(true)
+  
+  // AI Prompt Template
+  promptTemplate  String              @db.Text
+  
+  // Keyword stratejisi
+  keywords        String[]
+  useTrends       Boolean             @default(false)
+  
+  lastRunAt       DateTime?
+  nextRunAt       DateTime?
+  totalRuns       Int                 @default(0)
+  successfulRuns  Int                 @default(0)
+  
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  
+  scheduledPosts  ScheduledPost[]
+  
+  @@index([isActive])
+  @@index([nextRunAt])
+}
+
+enum AutomationFrequency {
+  HOURLY
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+// Zamanlanmış Yazılar
+model ScheduledPost {
+  id              String          @id @default(cuid())
+  
+  scheduledFor    DateTime
+  status          ScheduledStatus @default(PENDING)
+  
+  // İçerik detayları
+  topic           String
+  keywords        String[]
+  outline         String?         @db.Text
+  
+  // Oluşturulan post
+  postId          String?         @unique
+  
+  // Hata yönetimi
+  attempts        Int             @default(0)
+  lastAttemptAt   DateTime?
+  error           String?         @db.Text
+  
+  automationRuleId String?
+  automationRule   AutomationRule? @relation(fields: [automationRuleId], references: [id])
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  
+  @@index([scheduledFor])
+  @@index([status])
+}
+
+enum ScheduledStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// Post Analytics
+model PostAnalytics {
+  id              String   @id @default(cuid())
+  postId          String   @unique
+  post            Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  
+  // Trafik
+  totalViews      Int      @default(0)
+  uniqueVisitors  Int      @default(0)
+  
+  // Engagement
+  avgTimeOnPage   Int      @default(0) // saniye
+  bounceRate      Float    @default(0)
+  likes           Int      @default(0)
+  shares          Int      @default(0)
+  comments        Int      @default(0)
+  
+  // Kaynak
+  organicViews    Int      @default(0)
+  socialViews     Int      @default(0)
+  directViews     Int      @default(0)
+  referralViews   Int      @default(0)
+  
+  // Gelir
+  adImpressions   Int      @default(0)
+  adClicks        Int      @default(0)
+  estimatedRevenue Float   @default(0)
+  
+  affiliateClicks Int      @default(0)
+  affiliateRevenue Float   @default(0)
+  
+  lastUpdated     DateTime @default(now())
+  
+  @@index([postId])
+}
+
+// Site Analytics (Genel)
+model SiteAnalytics {
+  id              String   @id @default(cuid())
+  date            DateTime @unique
+  
+  // Günlük metrikler
+  totalViews      Int      @default(0)
+  uniqueVisitors  Int      @default(0)
+  newVisitors     Int      @default(0)
+  
+  // Gelir
+  totalRevenue    Float    @default(0)
+  adRevenue       Float    @default(0)
+  affiliateRevenue Float   @default(0)
+  
+  // AI Kullanımı
+  aiRequests      Int      @default(0)
+  aiCost          Float    @default(0)
+  postsGenerated  Int      @default(0)
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([date])
+}
+
+// Medya Kütüphanesi
+model Media {
+  id          String     @id @default(cuid())
+  fileName    String
+  url         String
+  type        MediaType
+  size        Int        // bytes
+  alt         String?
+  caption     String?
+  
+  width       Int?
+  height      Int?
+  
+  uploadedBy  String?
+  
+  createdAt   DateTime   @default(now())
+  
+  @@index([type])
+  @@index([createdAt])
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
+// AI Usage Tracking
+model AIUsage {
+  id              String   @id @default(cuid())
+  
+  model           String   // "claude-sonnet-4", "gpt-4" vs.
+  promptTokens    Int
+  completionTokens Int
+  totalTokens     Int
+  
+  cost            Float
+  
+  purpose         String   // "post_generation", "image_generation" vs.
+  referenceId     String?  // Post ID veya başka bir referans
+  
+  success         Boolean  @default(true)
+  error           String?  @db.Text
+  
+  createdAt       DateTime @default(now())
+  
+  @@index([createdAt])
+  @@index([purpose])
+}
+
+// Sistem Ayarları
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  category  String?  // "general", "ai", "monetization" vs.
+  
+  updatedAt DateTime @updatedAt
+  
+  @@index([category])
+}
