@@ -171,7 +171,7 @@ export default async function BlogDetailPage({ params }: BlogDetailPageProps) {
             priority
           />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/40 to-transparent" />
         
         {/* Content Overlay */}
         <div className="absolute inset-0 flex items-end">

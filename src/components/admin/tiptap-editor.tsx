@@ -66,6 +66,7 @@ export function TiptapEditor({ content, onChange, placeholder = 'Yazınızı bur
       Underline,
     ],
     content,
+    immediatelyRender: false,
     editorProps: {
       attributes: {
         class: 'prose prose-sm sm:prose lg:prose-lg xl:prose-xl focus:outline-none min-h-[400px] max-w-none p-4',

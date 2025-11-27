@@ -60,7 +60,7 @@ export async function generateBlogPost(
 
   // Gemini Pro modelini başlat
   const model = genAI.getGenerativeModel({ 
-    model: 'gemini-1.5-pro',
+    model: 'gemini-pro',
     generationConfig: {
       temperature: 0.7,
       topK: 40,
@@ -202,7 +202,7 @@ export async function improveContent(
   instructions: string
 ): Promise<{ improvedContent: string; usage: AIUsageStats }> {
   const model = genAI.getGenerativeModel({ 
-    model: 'gemini-1.5-pro',
+    model: 'gemini-pro',
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: 8192,
@@ -249,7 +249,7 @@ export async function generateTitleSuggestions(
   count: number = 5
 ): Promise<string[]> {
   const model = genAI.getGenerativeModel({ 
-    model: 'gemini-1.5-flash', // Daha hızlı model
+    model: 'gemini-pro', // Daha hızlı model
     generationConfig: {
       temperature: 0.8,
       maxOutputTokens: 500,
@@ -291,7 +291,7 @@ export async function generateTopicSuggestions(
   count: number = 5
 ): Promise<string[]> {
   const model = genAI.getGenerativeModel({ 
-    model: 'gemini-1.5-flash',
+    model: 'gemini-pro',
     generationConfig: {
       temperature: 0.9,
       maxOutputTokens: 500,

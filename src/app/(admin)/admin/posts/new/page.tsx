@@ -59,9 +59,14 @@ const postFormSchema = z.object({
 
 type PostFormData = z.infer<typeof postFormSchema>
 
-// Mock categories - gerçek uygulamada API'den gelecek
-const [categories, setCategories] = useState<any[]>([])
-const [isLoadingCategories, setIsLoadingCategories] = useState(true)
+export default function NewPostPage() {
+  const router = useRouter()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [content, setContent] = useState('')
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [newTag, setNewTag] = useState('')
+  const [categories, setCategories] = useState<any[]>([])
+  const [isLoadingCategories, setIsLoadingCategories] = useState(true)
 
   // Fetch categories
   useEffect(() => {
@@ -78,13 +83,6 @@ const [isLoadingCategories, setIsLoadingCategories] = useState(true)
     }
     fetchCategories()
   }, [])
-
-export default function NewPostPage() {
-  const router = useRouter()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [content, setContent] = useState('')
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [newTag, setNewTag] = useState('')
 
   const form = useForm<PostFormData>({
     resolver: zodResolver(postFormSchema),

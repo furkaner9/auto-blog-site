@@ -116,7 +116,7 @@ export default function CategoriesPage() {
 
   const fetchCategories = async () => {
     try {
-      const response = await categoriesApi.getAll({ includeCount: true })
+      const response = await categoriesApi.getAll({ includeCount: true }) as { data: any[] }
       setCategories(response.data)
     } catch (error) {
       console.error('Error fetching categories:', error)
