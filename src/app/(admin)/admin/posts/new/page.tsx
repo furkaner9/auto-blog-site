@@ -2,11 +2,13 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import * as z from 'zod'
+import { toast } from 'sonner'
+import { postsApi, categoriesApi } from '@/lib/api-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
 import { Separator } from '@/components/ui/separator'
 import { TiptapEditor } from '@/components/admin/tiptap-editor'
+import { AIGenerateDialog } from '@/components/admin/ai-generate-dialog'
 import { 
   Save, 
   Eye, 
@@ -57,12 +60,24 @@ const postFormSchema = z.object({
 type PostFormData = z.infer<typeof postFormSchema>
 
 // Mock categories - gerçek uygulamada API'den gelecek
-const mockCategories = [
-  { id: '1', name: 'Yapay Zeka', slug: 'yapay-zeka', color: '#8B5CF6' },
-  { id: '2', name: 'Web Geliştirme', slug: 'web-gelistirme', color: '#3B82F6' },
-  { id: '3', name: 'Teknoloji', slug: 'teknoloji', color: '#10B981' },
-  { id: '4', name: 'Programlama', slug: 'programlama', color: '#F59E0B' },
-]
+const [categories, setCategories] = useState<any[]>([])
+const [isLoadingCategories, setIsLoadingCategories] = useState(true)
+
+  // Fetch categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response: any = await categoriesApi.getAll({ activeOnly: true })
+        setCategories(response.data)
+      } catch (error) {
+        console.error('Error fetching categories:', error)
+        toast.error('Kategoriler yüklenemedi')
+      } finally {
+        setIsLoadingCategories(false)
+      }
+    }
+    fetchCategories()
+  }, [])
 
 export default function NewPostPage() {
   const router = useRouter()
@@ -126,16 +141,35 @@ export default function NewPostPage() {
   const onSubmit = async (data: PostFormData) => {
     setIsSubmitting(true)
     try {
-      // API call yapılacak
-      console.log('Submitting post:', { ...data, content, tags: selectedTags })
+      // TODO: Get actual authorId from session
+      const authorId = 'admin-user-id' // Replace with actual auth
       
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Keywords'ü array'e çevir
+      const keywordsArray = data.keywords 
+        ? data.keywords.split(',').map(k => k.trim()).filter(k => k.length > 0)
+        : []
       
-      // Success
+      const postData = {
+        ...data,
+        authorId,
+        content,
+        tags: selectedTags,
+        keywords: keywordsArray, // String'i array'e çevirdik
+        scheduledFor: data.scheduledFor ? new Date(data.scheduledFor) : undefined,
+      }
+
+      const response: any = await postsApi.create(postData)
+      
+      toast.success('Başarılı!', {
+        description: 'Yazı başarıyla oluşturuldu',
+      })
+      
       router.push('/admin/posts')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating post:', error)
+      toast.error('Hata!', {
+        description: error.message || 'Yazı oluşturulamadı',
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -156,6 +190,23 @@ export default function NewPostPage() {
     form.handleSubmit(onSubmit)()
   }
 
+  const handleAIGenerate = (aiData: any) => {
+    // AI'dan gelen verileri forma doldur
+    form.setValue('title', aiData.title)
+    form.setValue('slug', generateSlug(aiData.title))
+    form.setValue('excerpt', aiData.excerpt)
+    setContent(aiData.content)
+    form.setValue('content', aiData.content)
+    form.setValue('metaTitle', aiData.metaTitle)
+    form.setValue('metaDescription', aiData.metaDescription)
+    form.setValue('keywords', aiData.keywords.join(', '))
+    setSelectedTags(aiData.suggestedTags || [])
+    
+    toast.success('Yazı formuna aktarıldı!', {
+      description: 'İsterseniz düzenleyip yayınlayabilirsiniz'
+    })
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -169,6 +220,7 @@ export default function NewPostPage() {
             <X className="mr-2 h-4 w-4" />
             İptal
           </Button>
+          <AIGenerateDialog onGenerate={handleAIGenerate} />
           <Button variant="outline" onClick={() => window.open('/blog/preview', '_blank')}>
             <Eye className="mr-2 h-4 w-4" />
             Önizle
@@ -387,17 +439,27 @@ export default function NewPostPage() {
                     <SelectValue placeholder="Kategori seçin" />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockCategories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="h-3 w-3 rounded"
-                            style={{ backgroundColor: cat.color }}
-                          />
-                          {cat.name}
-                        </div>
+                    {isLoadingCategories ? (
+                      <SelectItem value="loading" disabled>
+                        Yükleniyor...
                       </SelectItem>
-                    ))}
+                    ) : categories.length === 0 ? (
+                      <SelectItem value="empty" disabled>
+                        Kategori bulunamadı
+                      </SelectItem>
+                    ) : (
+                      categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-3 w-3 rounded"
+                              style={{ backgroundColor: cat.color }}
+                            />
+                            {cat.name}
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
                 {form.formState.errors.categoryId && (

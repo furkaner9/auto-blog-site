@@ -15,9 +15,9 @@ import { Calendar, Clock, Eye, Share2, Twitter, Facebook, Linkedin } from 'lucid
 import type { PostCardData } from '@/types'
 
 interface BlogDetailPageProps {
-  params: {
+  params: Promise<{
     slug: string
-  }
+  }>
 }
 
 async function getPost(slug: string) {
@@ -115,7 +115,8 @@ async function getRelatedPosts(categoryId: string, currentPostId: string): Promi
 }
 
 export async function generateMetadata({ params }: BlogDetailPageProps): Promise<Metadata> {
-  const post = await getPost(params.slug)
+  const { slug } = await params
+  const post = await getPost(slug)
 
   if (!post) {
     return {
@@ -146,7 +147,8 @@ export async function generateMetadata({ params }: BlogDetailPageProps): Promise
 }
 
 export default async function BlogDetailPage({ params }: BlogDetailPageProps) {
-  const post = await getPost(params.slug)
+  const { slug } = await params
+  const post = await getPost(slug)
 
   if (!post) {
     notFound()
@@ -154,7 +156,7 @@ export default async function BlogDetailPage({ params }: BlogDetailPageProps) {
 
   const relatedPosts = await getRelatedPosts(post.categoryId, post.id)
   const readingTime = calculateReadingTime(post.content)
-  const shareUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/blog/${post.slug}`
+  const shareUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/blog/${slug}`
 
   return (
     <article className="pb-12">

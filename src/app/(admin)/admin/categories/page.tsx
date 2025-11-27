@@ -2,7 +2,11 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { toast } from 'sonner'
+import apiClient from '@/lib/api-client'
+
+const { categories: categoriesApi } = apiClient
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -92,7 +96,8 @@ const colorOptions = [
 ]
 
 export default function CategoriesPage() {
-  const [categories, setCategories] = useState(mockCategories)
+  const [categories, setCategories] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<any>(null)
 
@@ -104,11 +109,34 @@ export default function CategoriesPage() {
     isActive: true,
   })
 
-  const handleCreateCategory = () => {
-    // API call yapılacak
-    console.log('Creating category:', formData)
-    setIsCreateDialogOpen(false)
-    resetForm()
+  // Fetch categories
+  useEffect(() => {
+    fetchCategories()
+  }, [])
+
+  const fetchCategories = async () => {
+    try {
+      const response = await categoriesApi.getAll({ includeCount: true })
+      setCategories(response.data)
+    } catch (error) {
+      console.error('Error fetching categories:', error)
+      toast.error('Kategoriler yüklenemedi')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCreateCategory = async () => {
+    try {
+      await categoriesApi.create(formData)
+      toast.success('Kategori başarıyla oluşturuldu')
+      setIsCreateDialogOpen(false)
+      resetForm()
+      fetchCategories()
+    } catch (error: any) {
+      console.error('Error creating category:', error)
+      toast.error(error.message || 'Kategori oluşturulamadı')
+    }
   }
 
   const handleEditCategory = (category: any) => {
@@ -122,17 +150,31 @@ export default function CategoriesPage() {
     })
   }
 
-  const handleUpdateCategory = () => {
-    // API call yapılacak
-    console.log('Updating category:', editingCategory.id, formData)
-    setEditingCategory(null)
-    resetForm()
+  const handleUpdateCategory = async () => {
+    try {
+      await categoriesApi.update(editingCategory.id, formData)
+      toast.success('Kategori başarıyla güncellendi')
+      setEditingCategory(null)
+      resetForm()
+      fetchCategories()
+    } catch (error: any) {
+      console.error('Error updating category:', error)
+      toast.error(error.message || 'Kategori güncellenemedi')
+    }
   }
 
-  const handleDeleteCategory = (id: string) => {
-    if (confirm('Bu kategoriyi silmek istediğinizden emin misiniz?')) {
-      // API call yapılacak
-      console.log('Deleting category:', id)
+  const handleDeleteCategory = async (id: string) => {
+    if (!confirm('Bu kategoriyi silmek istediğinizden emin misiniz?')) {
+      return
+    }
+    
+    try {
+      await categoriesApi.delete(id)
+      toast.success('Kategori başarıyla silindi')
+      fetchCategories()
+    } catch (error: any) {
+      console.error('Error deleting category:', error)
+      toast.error(error.message || 'Kategori silinemedi')
     }
   }
 

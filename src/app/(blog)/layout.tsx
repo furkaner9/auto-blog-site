@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { siteConfig, navConfig } from '@/config/site'
 import { Button } from '@/components/ui/button'
 import { Search, Menu } from 'lucide-react'
+import { Toaster } from '@/components/ui/sonner'
 
 export const metadata: Metadata = {
   title: {
@@ -112,6 +113,9 @@ export default function BlogLayout({
           </div>
         </div>
       </footer>
+      
+      {/* Toaster */}
+      <Toaster />
     </div>
   )
 }

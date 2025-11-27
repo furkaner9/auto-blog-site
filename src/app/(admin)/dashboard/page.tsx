@@ -241,8 +241,8 @@ export default async function AdminDashboard() {
                       <Badge 
                         variant="secondary"
                         style={{ 
-                          backgroundColor: `${post.category.color}20`,
-                          color: post.category.color 
+                          backgroundColor: `${post.category.color || '#000'}20`,
+                          color: post.category.color || '#000'
                         }}
                       >
                         {post.category.name}

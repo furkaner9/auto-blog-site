@@ -18,6 +18,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Toaster } from '@/components/ui/sonner'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -198,6 +199,9 @@ export default function AdminLayout({
           {children}
         </main>
       </div>
+      
+      {/* Toaster */}
+      <Toaster />
     </div>
   )
 }
