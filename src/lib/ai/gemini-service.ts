@@ -1,8 +1,8 @@
-// src/lib/ai/gemini-service.ts
-
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
+
+// --- TİP TANIMLAMALARI ---
 
 export interface GenerateBlogPostOptions {
   topic: string
@@ -31,20 +31,26 @@ export interface AIUsageStats {
   cost: number
 }
 
-// Gemini Pro pricing (çok daha ucuz!)
+// --- SABİTLER & AYARLAR ---
+
+// Gemini 2.5 Flash Pricing (Tahmini)
 const TOKEN_COSTS = {
-  input: 0.00015 / 1000,  // $0.00015 per 1K tokens (128K'ya kadar)
-  output: 0.0006 / 1000,  // $0.0006 per 1K tokens
+  input: 0.075 / 1000000,
+  output: 0.30 / 1000000,
 }
+
+// GÜNCELLEME: Listeden doğruladığımız model ismini kullanıyoruz
+const MODEL_NAME = 'gemini-2.5-flash'
 
 function calculateCost(inputTokens: number, outputTokens: number): number {
   return (inputTokens * TOKEN_COSTS.input) + (outputTokens * TOKEN_COSTS.output)
 }
 
 function estimateTokens(text: string): number {
-  // Rough estimation: ~4 characters per token
   return Math.ceil(text.length / 4)
 }
+
+// --- ANA FONKSİYONLAR ---
 
 export async function generateBlogPost(
   options: GenerateBlogPostOptions
@@ -58,14 +64,15 @@ export async function generateBlogPost(
     categoryName = '',
   } = options
 
-  // Gemini Pro modelini başlat
+  // Gemini Modelini Başlat
   const model = genAI.getGenerativeModel({ 
-    model: 'gemini-pro',
+    model: MODEL_NAME,
     generationConfig: {
       temperature: 0.7,
       topK: 40,
       topP: 0.95,
       maxOutputTokens: 8192,
+      responseMimeType: "application/json",
     },
   })
 
@@ -84,12 +91,14 @@ export async function generateBlogPost(
     const response = result.response
     const text = response.text()
 
-    // Parse response
+    // Yanıtı işle
     const parsedContent = parseGeminiResponse(text)
 
-    // Token estimation (Gemini henüz usage bilgisi vermiyor, tahmin ediyoruz)
-    const promptTokens = estimateTokens(prompt)
-    const completionTokens = estimateTokens(text)
+    // Token & Maliyet Hesaplama
+    const usageMetadata = result.response.usageMetadata
+    
+    const promptTokens = usageMetadata?.promptTokenCount ?? estimateTokens(prompt)
+    const completionTokens = usageMetadata?.candidatesTokenCount ?? estimateTokens(text)
     
     const usage: AIUsageStats = {
       promptTokens,
@@ -140,43 +149,31 @@ ${keywords.length > 0 ? `**ANAHTAR KELİMELER:** ${keywords.join(', ')}` : ''}
    - Her bölümde alt başlıklar (H3) kullan
    - Listeler ve örnekler ekle
    - Sonuç paragrafı
-3. **HTML Formatı:** Düzgün HTML kullan (h2, h3, p, ul, ol, li, strong, em)
+3. **HTML Formatı:** Düzgün HTML kullan (h2, h3, p, ul, ol, li, strong, em). HTML taglerini string içinde escape etme.
 4. **SEO:** Anahtar kelimeleri doğal şekilde yerleştir
 5. **Okunabilirlik:** Paragraflar kısa ve anlaşılır olsun
 
 **ÇIKTI FORMATI (JSON):**
-Lütfen yanıtını SADECE aşağıdaki JSON formatında ver, başka hiçbir şey yazma:
+Bu JSON şemasını kesinlikle takip et:
 
-\`\`\`json
 {
-  "title": "Blog yazısının başlığı",
-  "content": "<h2>Giriş</h2><p>İçerik buraya...</p>",
-  "excerpt": "150-200 kelimelik kısa özet",
-  "metaTitle": "SEO için optimize edilmiş başlık (max 60 karakter)",
-  "metaDescription": "SEO için meta açıklama (max 160 karakter)",
-  "keywords": ["anahtar1", "anahtar2", "anahtar3"],
-  "suggestedTags": ["etiket1", "etiket2", "etiket3"]
-}
-\`\`\`
-
-Şimdi bu kriterlere göre harika bir blog yazısı oluştur!`
+  "title": "string",
+  "content": "string (HTML içeriği)",
+  "excerpt": "string (kısa özet)",
+  "metaTitle": "string",
+  "metaDescription": "string",
+  "keywords": ["string"],
+  "suggestedTags": ["string"]
+}`
 }
 
 function parseGeminiResponse(responseText: string): GeneratedBlogPost {
   try {
-    // JSON bloğunu bul ve parse et
-    const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/)
-    
-    let jsonData
-    if (jsonMatch) {
-      jsonData = JSON.parse(jsonMatch[1])
-    } else {
-      // Eğer markdown yok ise direkt parse et
-      jsonData = JSON.parse(responseText)
-    }
+    const cleanJson = responseText.replace(/```json\n?|\n?```/g, '').trim();
+    const jsonData = JSON.parse(cleanJson)
 
-    // Okuma süresini hesapla (ortalama 200 kelime/dakika)
-    const wordCount = jsonData.content.replace(/<[^>]*>/g, '').split(/\s+/).length
+    const contentText = jsonData.content.replace(/<[^>]*>/g, '')
+    const wordCount = contentText.split(/\s+/).filter((w: string) => w.length > 0).length
     const estimatedReadingTime = Math.ceil(wordCount / 200)
 
     return {
@@ -192,17 +189,16 @@ function parseGeminiResponse(responseText: string): GeneratedBlogPost {
   } catch (error) {
     console.error('Error parsing Gemini response:', error)
     console.error('Response text:', responseText)
-    throw new Error('Gemini yanıtı işlenemedi')
+    throw new Error('Gemini yanıtı işlenemedi (JSON Parse Hatası)')
   }
 }
 
-// Yazıyı geliştir/iyileştir
 export async function improveContent(
   content: string,
   instructions: string
 ): Promise<{ improvedContent: string; usage: AIUsageStats }> {
   const model = genAI.getGenerativeModel({ 
-    model: 'gemini-pro',
+    model: MODEL_NAME,
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: 8192,
@@ -217,14 +213,15 @@ ${content}
 **İYİLEŞTİRME TALİMATI:**
 ${instructions}
 
-Lütfen iyileştirilmiş içeriği HTML formatında döndür. Sadece içeriği ver, açıklama yapma.`
+Lütfen iyileştirilmiş içeriği HTML formatında döndür. Sadece içeriği ver, açıklama yapma, markdown bloğu kullanma.`
 
   try {
     const result = await model.generateContent(prompt)
     const text = result.response.text()
 
-    const promptTokens = estimateTokens(prompt)
-    const completionTokens = estimateTokens(text)
+    const usageMetadata = result.response.usageMetadata
+    const promptTokens = usageMetadata?.promptTokenCount ?? estimateTokens(prompt)
+    const completionTokens = usageMetadata?.candidatesTokenCount ?? estimateTokens(text)
     
     const usage: AIUsageStats = {
       promptTokens,
@@ -243,83 +240,80 @@ Lütfen iyileştirilmiş içeriği HTML formatında döndür. Sadece içeriği v
   }
 }
 
-// Başlık önerileri
 export async function generateTitleSuggestions(
   topic: string,
   count: number = 5
 ): Promise<string[]> {
   const model = genAI.getGenerativeModel({ 
-    model: 'gemini-pro', // Daha hızlı model
+    model: MODEL_NAME,
     generationConfig: {
       temperature: 0.8,
-      maxOutputTokens: 500,
+      maxOutputTokens: 1000,
+      responseMimeType: "application/json"
     },
   })
 
   const prompt = `"${topic}" konusu için ${count} farklı ilgi çekici blog başlığı öner.
-
-Her başlık:
-- SEO uyumlu olmalı
-- 50-60 karakter arası
-- İlgi çekici ve tıklanabilir
-- Türkçe olmalı
-
-Sadece başlıkları listele, her satırda bir başlık, numaralandırma veya açıklama yapma.`
+  
+  Format: JSON String Array ["Başlık 1", "Başlık 2"]
+  
+  Kriterler:
+  - SEO uyumlu
+  - 50-60 karakter arası
+  - İlgi çekici
+  - Türkçe`
 
   try {
     const result = await model.generateContent(prompt)
     const text = result.response.text()
+    
+    const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
+    const titles = JSON.parse(cleanJson);
 
-    // Başlıkları satırlara ayır
-    const titles = text
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0 && !line.startsWith('#'))
-      .map(line => line.replace(/^[-*•]\s*/, '')) // Liste işaretlerini temizle
-      .slice(0, count)
+    if (Array.isArray(titles)) {
+        return titles.slice(0, count);
+    }
+    return [];
 
-    return titles
   } catch (error) {
     console.error('Error generating titles:', error)
     throw new Error('Başlık önerileri oluşturulamadı')
   }
 }
 
-// Trend konuları öner (Bonus!)
 export async function generateTopicSuggestions(
   category: string,
   count: number = 5
 ): Promise<string[]> {
   const model = genAI.getGenerativeModel({ 
-    model: 'gemini-pro',
+    model: MODEL_NAME,
     generationConfig: {
       temperature: 0.9,
-      maxOutputTokens: 500,
+      maxOutputTokens: 1000,
+      responseMimeType: "application/json"
     },
   })
 
-  const prompt = `"${category}" kategorisi için ${count} farklı güncel ve trend blog yazısı konusu öner.
-
-Her konu:
-- Güncel ve ilgi çekici olmalı
-- SEO potansiyeli yüksek olmalı
-- Hedef kitle için değerli olmalı
-- Türkçe olmalı
-
-Sadece konuları listele, her satırda bir konu, açıklama yapma.`
+  const prompt = `"${category}" kategorisi için ${count} farklı güncel blog konusu öner.
+  
+  Format: JSON String Array ["Konu 1", "Konu 2"]
+  
+  Kriterler:
+  - Güncel ve trend
+  - SEO potansiyeli yüksek
+  - Türkçe`
 
   try {
     const result = await model.generateContent(prompt)
     const text = result.response.text()
 
-    const topics = text
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line.length > 0)
-      .map(line => line.replace(/^[-*•]\s*/, ''))
-      .slice(0, count)
+    const cleanJson = text.replace(/```json\n?|\n?```/g, '').trim();
+    const topics = JSON.parse(cleanJson);
 
-    return topics
+    if (Array.isArray(topics)) {
+        return topics.slice(0, count);
+    }
+    return [];
   } catch (error) {
     console.error('Error generating topics:', error)
     throw new Error('Konu önerileri oluşturulamadı')

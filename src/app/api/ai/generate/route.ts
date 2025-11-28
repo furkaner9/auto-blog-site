@@ -1,5 +1,3 @@
-// src/app/api/ai/generate/route.ts
-
 import { NextRequest, NextResponse } from 'next/server'
 import { generateBlogPost } from '@/lib/ai/gemini-service'
 import { prisma } from '@/lib/prisma'
@@ -20,7 +18,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = generateSchema.parse(body)
 
-    // Get category name if provided
     let categoryName = ''
     if (validatedData.categoryId) {
       const category = await prisma.category.findUnique({
@@ -30,7 +27,6 @@ export async function POST(request: NextRequest) {
       categoryName = category?.name || ''
     }
 
-    // Generate blog post with AI
     const result = await generateBlogPost({
       topic: validatedData.topic,
       keywords: validatedData.keywords,
@@ -40,18 +36,22 @@ export async function POST(request: NextRequest) {
       categoryName,
     })
 
-    // Save AI usage to database
-    await prisma.aIUsage.create({
-      data: {
-        model: 'gemini-1.5-pro',
-        promptTokens: result.usage.promptTokens,
-        completionTokens: result.usage.completionTokens,
-        totalTokens: result.usage.totalTokens,
-        cost: result.usage.cost,
-        purpose: 'post_generation',
-        success: true,
-      },
-    })
+    // Save AI usage to database (Non-blocking)
+    try {
+      await prisma.aIUsage.create({
+        data: {
+          model: 'gemini-2.5-flash', // GÜNCELLENDİ
+          promptTokens: result.usage.promptTokens,
+          completionTokens: result.usage.completionTokens,
+          totalTokens: result.usage.totalTokens,
+          cost: result.usage.cost,
+          purpose: 'post_generation',
+          success: true,
+        },
+      })
+    } catch (dbError) {
+      console.error('Failed to log AI usage (Non-fatal):', dbError)
+    }
 
     return NextResponse.json({
       success: true,
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     try {
       await prisma.aIUsage.create({
         data: {
-          model: 'gemini-1.5-pro',
+          model: 'gemini-2.5-flash',
           promptTokens: 0,
           completionTokens: 0,
           totalTokens: 0,
