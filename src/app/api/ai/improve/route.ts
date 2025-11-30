@@ -1,3 +1,5 @@
+// src/app/api/ai/improve/route.ts
+
 import { NextRequest, NextResponse } from 'next/server'
 import { improveContent } from '@/lib/ai/gemini-service'
 import { prisma } from '@/lib/prisma'
@@ -19,22 +21,18 @@ export async function POST(request: NextRequest) {
       validatedData.instructions
     )
 
-    // Save AI usage to database (Non-blocking)
-    try {
-      await prisma.aIUsage.create({
-        data: {
-          model: 'gemini-2.5-flash', // GÜNCELLENDİ
-          promptTokens: result.usage.promptTokens,
-          completionTokens: result.usage.completionTokens,
-          totalTokens: result.usage.totalTokens,
-          cost: result.usage.cost,
-          purpose: 'content_improvement',
-          success: true,
-        },
-      })
-    } catch (dbLogError) {
-      console.error('Failed to log AI usage stats to DB (Non-fatal):', dbLogError)
-    }
+    // Save AI usage to database
+    await prisma.aIUsage.create({
+      data: {
+        model: 'gemini-1.5-pro',
+        promptTokens: result.usage.promptTokens,
+        completionTokens: result.usage.completionTokens,
+        totalTokens: result.usage.totalTokens,
+        cost: result.usage.cost,
+        purpose: 'content_improvement',
+        success: true,
+      },
+    })
 
     return NextResponse.json({
       success: true,
@@ -45,23 +43,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('Error improving content:', error)
-
-    try {
-      await prisma.aIUsage.create({
-        data: {
-          model: 'gemini-2.5-flash',
-          promptTokens: 0,
-          completionTokens: 0,
-          totalTokens: 0,
-          cost: 0,
-          purpose: 'content_improvement',
-          success: false,
-          error: error.message,
-        },
-      })
-    } catch (dbError) {
-      console.error('Failed to log AI usage (Error case):', dbError)
-    }
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

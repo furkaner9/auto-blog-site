@@ -8,7 +8,10 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import * as z from 'zod'
 import { toast } from 'sonner'
-import { postsApi, categoriesApi } from '@/lib/api-client'
+import apiClient from '@/lib/api-client'
+import { createSlug } from '@/lib/utils'
+
+const { posts: postsApi, categories: categoriesApi } = apiClient
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -59,14 +62,9 @@ const postFormSchema = z.object({
 
 type PostFormData = z.infer<typeof postFormSchema>
 
-export default function NewPostPage() {
-  const router = useRouter()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [content, setContent] = useState('')
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [newTag, setNewTag] = useState('')
-  const [categories, setCategories] = useState<any[]>([])
-  const [isLoadingCategories, setIsLoadingCategories] = useState(true)
+// Mock categories - gerçek uygulamada API'den gelecek
+const [categories, setCategories] = useState<any[]>([])
+const [isLoadingCategories, setIsLoadingCategories] = useState(true)
 
   // Fetch categories
   useEffect(() => {
@@ -83,6 +81,13 @@ export default function NewPostPage() {
     }
     fetchCategories()
   }, [])
+
+export default function NewPostPage() {
+  const router = useRouter()
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [content, setContent] = useState('')
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [newTag, setNewTag] = useState('')
 
   const form = useForm<PostFormData>({
     resolver: zodResolver(postFormSchema),
@@ -147,12 +152,19 @@ export default function NewPostPage() {
         ? data.keywords.split(',').map(k => k.trim()).filter(k => k.length > 0)
         : []
       
-      const postData = {
-        ...data,
-        authorId,
+      const postData: any = {
+        title: data.title,
+        slug: data.slug,
+        excerpt: data.excerpt,
         content,
+        categoryId: data.categoryId,
+        authorId,
         tags: selectedTags,
-        keywords: keywordsArray, // String'i array'e çevirdik
+        keywords: keywordsArray,
+        status: data.status,
+        featuredImage: data.featuredImage,
+        metaTitle: data.metaTitle,
+        metaDescription: data.metaDescription,
         scheduledFor: data.scheduledFor ? new Date(data.scheduledFor) : undefined,
       }
 
@@ -189,19 +201,30 @@ export default function NewPostPage() {
   }
 
   const handleAIGenerate = (aiData: any) => {
+    console.log('=== RECEIVED AI DATA ===')
+    console.log('Title:', aiData.title)
+    console.log('Content length:', aiData.content?.length || 0)
+    console.log('Excerpt length:', aiData.excerpt?.length || 0)
+    console.log('Content preview:', aiData.content?.substring(0, 200))
+    console.log('========================')
+    
     // AI'dan gelen verileri forma doldur
     form.setValue('title', aiData.title)
-    form.setValue('slug', generateSlug(aiData.title))
+    form.setValue('slug', createSlug(aiData.title))
     form.setValue('excerpt', aiData.excerpt)
+    
+    // BURADA SORUN OLABİLİR - content doğru mu set ediliyor?
+    console.log('Setting content to editor...')
     setContent(aiData.content)
     form.setValue('content', aiData.content)
+    
     form.setValue('metaTitle', aiData.metaTitle)
     form.setValue('metaDescription', aiData.metaDescription)
     form.setValue('keywords', aiData.keywords.join(', '))
     setSelectedTags(aiData.suggestedTags || [])
     
     toast.success('Yazı formuna aktarıldı!', {
-      description: 'İsterseniz düzenleyip yayınlayabilirsiniz'
+      description: `İçerik uzunluğu: ${aiData.content?.length || 0} karakter`
     })
   }
 

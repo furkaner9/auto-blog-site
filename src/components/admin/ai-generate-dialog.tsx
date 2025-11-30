@@ -103,9 +103,15 @@ export function AIGenerateDialog({ onGenerate, trigger }: AIGenerateDialogProps)
     try {
       const response: any = await aiApi.generatePost(formData)
 
+      console.log('=== AI RESPONSE ===')
+      console.log('Title:', response.data.title)
+      console.log('Content length:', response.data.content?.length || 0)
+      console.log('Excerpt length:', response.data.excerpt?.length || 0)
+      console.log('===================')
+
       toast.success('Blog yazısı başarıyla oluşturuldu!', {
         id: toastId,
-        description: `Maliyet: $${response.usage.cost.toFixed(4)}`,
+        description: `Maliyet: ${response.usage.cost.toFixed(4)} - İçerik: ${response.data.content?.length || 0} karakter`,
       })
 
       onGenerate(response.data)
